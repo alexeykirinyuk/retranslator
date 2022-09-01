@@ -11,10 +11,6 @@ import (
 type mockEventRepo struct {
 }
 
-func newMockEventRepo() mockEventRepo {
-	return mockEventRepo{}
-}
-
 func (m *mockEventRepo) Lock(batchSize uint64) ([]model.ProductEvent, error) {
 	events := make([]model.ProductEvent, 0, 20) // buffer - 5
 	for i := uint64(0); i < 20; i++ {

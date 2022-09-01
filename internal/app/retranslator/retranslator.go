@@ -9,11 +9,11 @@ import (
 )
 
 type eventRepo interface {
-	Lock(batchSize uint64) ([]*model.ProductEvent, error)
+	Lock(batchSize uint64) ([]model.ProductEvent, error)
 }
 
 type eventSender interface {
-	Send(subdomain *model.ProductEvent) error
+	Send(subdomain model.ProductEvent) error
 }
 
 type Retranslator struct {
@@ -23,6 +23,7 @@ type Retranslator struct {
 
 type Cfg struct {
 	ConsumerCount uint64
+	ConsumerSize  uint64
 	ProducerCount uint64
 
 	BatchSize uint64
@@ -35,6 +36,7 @@ type Cfg struct {
 func NewRetranslator(cfg Cfg) *Retranslator {
 	consumer := consumer.NewConsumer(
 		cfg.ConsumerCount,
+		cfg.ConsumerSize,
 		cfg.Repo,
 		cfg.BatchSize,
 		cfg.Timeout,

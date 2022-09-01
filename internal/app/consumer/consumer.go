@@ -9,7 +9,7 @@ import (
 )
 
 type eventRepo interface {
-	Lock(batchSize uint64) ([]*model.ProductEvent, error)
+	Lock(batchSize uint64) ([]model.ProductEvent, error)
 }
 
 type Consumer struct {
@@ -21,13 +21,14 @@ type Consumer struct {
 	repo eventRepo
 	wg   *sync.WaitGroup
 
-	ch     chan *model.ProductEvent
+	ch     chan model.ProductEvent
 	ctx    context.Context
 	cancel context.CancelFunc
 }
 
 func NewConsumer(
 	routines uint64,
+	bufferSize uint64,
 	repo eventRepo,
 	batchSize uint64,
 	timeout time.Duration,
@@ -36,7 +37,7 @@ func NewConsumer(
 
 	return &Consumer{
 		routines:  routines,
-		ch:        make(chan *model.ProductEvent),
+		ch:        make(chan model.ProductEvent, bufferSize),
 		repo:      repo,
 		batchSize: batchSize,
 		wg:        &sync.WaitGroup{},
@@ -46,7 +47,7 @@ func NewConsumer(
 	}
 }
 
-func (c *Consumer) GetOutChannel() <-chan *model.ProductEvent {
+func (c *Consumer) GetOutChannel() <-chan model.ProductEvent {
 	return c.ch
 }
 
@@ -71,7 +72,7 @@ func (c *Consumer) Consume() {
 }
 
 func consumeEvents(c *Consumer) {
-	syncChannel := make(chan []*model.ProductEvent, 1)
+	syncChannel := make(chan []model.ProductEvent, 1)
 
 	c.wg.Add(1)
 	go func() {
@@ -79,7 +80,7 @@ func consumeEvents(c *Consumer) {
 		defer close(syncChannel)
 
 		events, err := c.repo.Lock(c.batchSize)
-		if err != nil {
+		if err == nil {
 			syncChannel <- events
 		}
 	}()
@@ -88,10 +89,21 @@ func consumeEvents(c *Consumer) {
 	case <-c.ctx.Done():
 		return
 	case events, ok := <-syncChannel:
-		if ok {
-			for _, event := range events {
-				c.ch <- event
-			}
+		if !ok {
+			return
+		}
+
+		sendEventsToOutChannel(c, events)
+	}
+}
+
+func sendEventsToOutChannel(c *Consumer, events []model.ProductEvent) {
+	for _, event := range events {
+		select {
+		case <-c.ctx.Done():
+			return
+		case c.ch <- event:
+			continue
 		}
 	}
 }
@@ -99,5 +111,8 @@ func consumeEvents(c *Consumer) {
 func (c *Consumer) Stop() {
 	c.cancel()
 	c.wg.Wait()
+}
+
+func (c *Consumer) Close() {
 	close(c.ch)
 }

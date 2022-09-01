@@ -22,5 +22,5 @@ type ProductEvent struct {
 	EventType   EventType
 	EventStatus EventStatus
 	OccuredAt   time.Time
-	Data        *Product
+	Data        Product
 }
